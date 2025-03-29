@@ -29,14 +29,21 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ message: 'Credenciales inválidas' });
   }
 
-  const token = jwt.sign(
+  const accessToken = jwt.sign(
     { id: user._id, email: user.email },
     process.env.JWT_SECRET,
-    { expiresIn: '1h' } // se define el tiempo de expiración del token
+    { expiresIn: process.env.JWT_EXPIRATION }
+  );
+  
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRATION }
   );
 
-  res.json({ token });
+  res.json({ accessToken, refreshToken });
 });
+
 
 // GET /api/protected
 router.get('/protected', verifyToken, (req, res) => {
@@ -44,3 +51,23 @@ router.get('/protected', verifyToken, (req, res) => {
 });
 
 module.exports = router;
+
+// POST /api/refresh
+router.post('/refresh', (req, res) => {
+  const { refreshToken } = req.body;
+  if (!refreshToken) return res.status(401).json({ message: 'Token de refresco requerido' });
+
+  try {
+    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+    const newAccessToken = jwt.sign(
+      { id: decoded.id, email: decoded.email },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRATION }
+    );
+
+    res.json({ accessToken: newAccessToken });
+  } catch (err) {
+    res.status(403).json({ message: 'Refresh token inválido o expirado' });
+  }
+});
