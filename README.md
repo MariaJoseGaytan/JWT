@@ -1,21 +1,23 @@
 # Guía de Autenticación con JWT + Refresh Tokens (Web & Móvil)
 
-Este proyecto implementa un backend en **Node.js + Express + MongoDB** que autentica usuarios utilizando **JSON Web Tokens (JWT)**. Incluye **access tokens de corta duración** y **refresh tokens para renovar el access token sin volver a iniciar sesión**.
+> ✨ **Propósito del proyecto:**  
+> Aprender a implementar un sistema de autenticación  usando JSON Web Tokens con `accessToken` de corta duración y `refreshToken` para renovarlo automáticamente sin que el usuario tenga que iniciar sesión otra vez.
+
+Este proyecto implementa un backend en **Node.js + Express + MongoDB** que autentica usuarios utilizando **JWT**. Es compatible tanto con aplicaciones **web como móviles**.
 
 ---
 
 ## ¿Qué necesitas para que esto funcione?
 
-Antes de probar o modificar el proyecto, **debes tener instalado y configurado lo siguiente**:
-
-- Node.js y npm 
-- MongoDB instalado localmente (o usar Atlas)
-- Postman para pruebas
-- Instalar dependencias del proyecto
+- Node.js y npm
+- MongoDB local (o usar Atlas)
+- Postman
+- VS Code y GitHub (opcional pero útil)
+- Instalación:
 ```bash
 npm install
 ```
-- Crea un archivo `.env` con el siguiente contenido:
+- Crear archivo `.env`:
 ```env
 PORT=3000
 MONGO_URI=mongodb://localhost:27017/jwt-auth
@@ -29,34 +31,82 @@ JWT_REFRESH_EXPIRATION=60s
 
 ## ¿Cómo funciona el flujo JWT con refresh tokens?
 
-1. El usuario inicia sesión con su correo y contraseña.
+1. El usuario inicia sesión.
 2. El backend responde con:
    - `accessToken`: válido por 60 segundos
-   - `refreshToken`: válido también por 60 segundos (puedes modificarlo en `.env`)
-3. El cliente (app web o móvil):
-   - Guarda ambos tokens (por ejemplo, en localStorage o SharedPreferences).
-4. El `accessToken` se usa para acceder a rutas protegidas (se manda como `Bearer Token`).
-5. Cuando el `accessToken` expira, el backend responde con error 401.
-6. El cliente **automáticamente** hace una petición a `/api/refresh` con el `refreshToken`.
-7. Si el `refreshToken` es válido, se genera un nuevo `accessToken`, y el usuario sigue navegando sin interrupción.
+   - `refreshToken`: válido por 60 segundos (configurable)
+3. El cliente guarda ambos tokens.
+4. Usa el `accessToken` para acceder a rutas privadas.
+5. Si el token expira, se recibe un error `401`.
+6. El cliente hace una petición a `/api/refresh` con el `refreshToken`.
+7. Se genera un nuevo `accessToken` sin volver a loguear al usuario.
+
+---
+---
+
+## ¿Cómo se usan los tokens en el backend (`index.js`)?
+
+En el archivo `index.js`, después de configurar Express y los middlewares, se conectan las rutas de autenticación. Pero lo más importante es cómo se protegen las rutas privadas usando un **middleware** que verifica el `accessToken`.
+
+### 1. Middleware: `verifyToken.js`
+```js
+const jwt = require('jsonwebtoken');
+
+function verifyToken(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) return res.status(403).json({ message: 'Token requerido' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // Se guarda el usuario en la request
+    next(); // Continúa a la ruta protegida
+  } catch (err) {
+    res.status(401).json({ message: 'Token inválido o expirado' });
+  }
+}
+
+module.exports = verifyToken;
+```
 
 ---
 
-## Endpoints disponibles del proyecto
+### 2. Uso del middleware en rutas protegidas
 
-| Método | Ruta                | Protegida | Descripción                                     |
-|--------|---------------------|-----------|-------------------------------------------------|
-| POST   | `/api/register`     | No        | Registrar usuario con email y password          |
-| POST   | `/api/login`        | No        | Iniciar sesión, retorna accessToken y refreshToken |
-| GET    | `/api/protected`    | Sí        | Ruta privada que requiere access token válido   |
-| POST   | `/api/refresh`      | No        | Genera un nuevo access token usando el refresh token |
+En el archivo `routes/auth.js` o en cualquier otro archivo de rutas, puedes proteger una ruta así:
+
+```js
+const verifyToken = require('../middleware/verifyToken');
+
+router.get('/protected', verifyToken, (req, res) => {
+  res.json({
+    message: 'Acceso permitido',
+    usuario: req.user
+  });
+});
+```
+
+Esto asegura que solo usuarios con un token válido pueden acceder a esa ruta.
+
+---
+
+## Endpoints disponibles
+
+| Método | Ruta             | Protegida | Descripción                                     |
+|--------|------------------|-----------|-------------------------------------------------|
+| POST   | `/api/register`  | No        | Crear un nuevo usuario                          |
+| POST   | `/api/login`     | No        | Iniciar sesión y recibir tokens                 |
+| GET    | `/api/protected` | Sí        | Ruta protegida con JWT                          |
+| POST   | `/api/refresh`   | No        | Obtener nuevo `accessToken` con `refreshToken` |
 
 ---
 
 ## Ejemplo de uso en Postman
 
-### 1. Registrar usuario
-`POST /api/register`
+### 1. Registro
+```http
+POST /api/register
+```
 ```json
 {
   "email": "maria@correo.com",
@@ -65,14 +115,17 @@ JWT_REFRESH_EXPIRATION=60s
 ```
 
 ### 2. Login
-`POST /api/login`
+```http
+POST /api/login
+```
 ```json
 {
   "email": "maria@correo.com",
   "password": "123456"
 }
 ```
-**Respuesta:**
+
+**Respuesta esperada:**
 ```json
 {
   "accessToken": "...",
@@ -80,39 +133,72 @@ JWT_REFRESH_EXPIRATION=60s
 }
 ```
 
-### 3. Acceso a ruta protegida
-`GET /api/protected`
-- Header: `Authorization: Bearer ACCESS_TOKEN`
+### 3. Ruta protegida
+```http
+GET /api/protected
+```
+**Header:**  
+```
+Authorization: Bearer ACCESS_TOKEN
+```
 
-### 4. Token expirado → usar `/api/refresh`
-`POST /api/refresh`
+### 4. Token expirado → refrescar
+```http
+POST /api/refresh
+```
 ```json
 {
   "refreshToken": "..."
 }
 ```
-**Respuesta:**
-```json
-{
-  "accessToken": "nuevo_token"
-}
-```
 
 ---
 
-## ¿Cómo vamos a usar esto en nuestras apps web y móvil?
+## ¿Cómo configuramos los tokens?
 
-En ambas plataformas, el cliente debe:
-1. Guardar el `accessToken` y el `refreshToken` tras login.
-2. Usar `accessToken` para acceder a rutas protegidas.
-3. Detectar si el access token expiró (status 401).
-4. En ese caso, hacer un `POST` a `/api/refresh` con el `refreshToken`.
-5. Guardar el nuevo `accessToken` recibido.
-6. Reintentar la petición original.
+En el archivo `.env`, puedes definir cuánto tiempo duran los tokens:
 
-Este flujo se puede automatizar en una función central, por ejemplo:
+```env
+JWT_EXPIRATION=60s
+JWT_REFRESH_EXPIRATION=60s
+```
 
-### Web 
+Estos valores son usados en el código para generar los tokens:
+
+```js
+const accessToken = jwt.sign(
+  { id: user._id, email: user.email },
+  process.env.JWT_SECRET,
+  { expiresIn: process.env.JWT_EXPIRATION }
+);
+
+const refreshToken = jwt.sign(
+  { id: user._id },
+  process.env.JWT_REFRESH_SECRET,
+  { expiresIn: process.env.JWT_REFRESH_EXPIRATION }
+);
+```
+
+La duración puede ser:  
+- `'60s'` → 60 segundos  
+- `'15m'` → 15 minutos  
+- `'7d'` → 7 días  
+- o directamente un número en segundos
+
+---
+
+## ¿Cómo usamos esto en nuestras apps web y móvil?
+
+### Flujo del cliente:
+1. Guarda `accessToken` y `refreshToken` tras login.
+2. Usa `accessToken` en las peticiones protegidas.
+3. Si el token expira (401), automáticamente llama a `/api/refresh`.
+4. Reemplaza el `accessToken` viejo por el nuevo.
+5. Reintenta la petición original.
+
+---
+
+### Ejemplo en Web (JS)
 ```js
 async function fetchWithAuth(url, options = {}) {
   let token = localStorage.getItem("accessToken");
@@ -148,9 +234,18 @@ async function fetchWithAuth(url, options = {}) {
 
 ---
 
-## Consideraciones:
+## 📌 Consideraciones
 
-- En este proyecto de pruebas usamos `60s` para expiración, pero en producción se recomienda:
-  - `accessToken`: 15 minutos
-  - `refreshToken`: 7 días o más
-- Los tokens deben guardarse en lugares seguros según el entorno (cookies httpOnly, encrypted storage, etc.)
+- Usa tokens cortos (`60s`) para pruebas. En producción:
+  - `accessToken`: 15 min
+  - `refreshToken`: 7 días
+- Guarda los tokens en:
+  - Web: `localStorage` o cookies seguras
+  - Móvil: `SharedPreferences` o almacenamiento seguro
+
+## Resumen 
+
+- El `accessToken` viaja en el **header Authorization**
+- El backend usa un middleware para verificarlo
+- Las rutas privadas solo funcionan si el token es válido
+- Si el token expiró, el frontend puede usar el `refreshToken` para obtener uno nuevo automáticamente
