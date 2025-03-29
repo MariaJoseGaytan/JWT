@@ -42,7 +42,6 @@ JWT_REFRESH_EXPIRATION=60s
 7. Se genera un nuevo `accessToken` sin volver a loguear al usuario.
 
 ---
----
 
 ## ¿Cómo se usan los tokens en el backend (`index.js`)?
 
