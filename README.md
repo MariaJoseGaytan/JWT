@@ -1,6 +1,6 @@
 # Guía de Autenticación con JWT + Refresh Tokens (Web & Móvil)
 
-> ✨ **Propósito del proyecto:**  
+>  **Propósito del proyecto:**  
 > Aprender a implementar un sistema de autenticación  usando JSON Web Tokens con `accessToken` de corta duración y `refreshToken` para renovarlo automáticamente sin que el usuario tenga que iniciar sesión otra vez.
 
 Este proyecto implementa un backend en **Node.js + Express + MongoDB** que autentica usuarios utilizando **JWT**. Es compatible tanto con aplicaciones **web como móviles**.
