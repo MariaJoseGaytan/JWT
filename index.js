@@ -12,6 +12,10 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Importar rutas
+const authRoutes = require('./routes/auth');
+app.use('/api', authRoutes);
+
 // Ruta de prueba
 app.get('/', (req, res) => {
   res.send('Servidor funcionando correctamente');
